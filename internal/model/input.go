@@ -1,7 +1,12 @@
 package model
 
+type PriceBreak struct {
+	Quant int     `json:"quant"`
+	Price float64 `json:"price"`
+}
+
 type DBFItem struct {
-	Code      int
+	Code      string
 	Name      string
 	Producer  string
 	QntPack   int
@@ -10,18 +15,7 @@ type DBFItem struct {
 	Prices    []PriceBreak
 	ClassName string
 	History   string
+	ImageURL  string
 	Weight    float64
-}
-
-type XLSXOffer struct {
-	Name     string
-	Price    float64
-	Currency string
-	ImageURL string
-	Stock    int
-}
-
-type PriceBreak struct {
-	Quant int     `json:"quant"`
-	Price float64 `json:"price"`
+	Currency  string
 }

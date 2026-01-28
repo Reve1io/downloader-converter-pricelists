@@ -2,6 +2,8 @@ package parser
 
 import (
 	"fmt"
+	"log"
+	"os"
 	"strconv"
 	"strings"
 
@@ -11,6 +13,30 @@ import (
 )
 
 func ParseDBF(path string) ([]model.DBFItem, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	header := make([]byte, 1)
+	if _, err := f.Read(header); err != nil {
+		return nil, err
+	}
+
+	log.Printf("DBF signature: 0x%X\n", header[0])
+
+	switch header[0] {
+	case 0x03, 0x83, 0x8B:
+		// OK
+	default:
+		return nil, fmt.Errorf(
+			"file %s is not DBF (signature 0x%X)",
+			path,
+			header[0],
+		)
+	}
+
 	dbf, err := godbf.NewFromFile(path, "UTF8")
 	if err != nil {
 		return nil, err
@@ -47,7 +73,7 @@ func ParseDBF(path string) ([]model.DBFItem, error) {
 			History:   dbf.FieldValue(i, idx["HISTORY"]),
 		}
 
-		item.Code, _ = strconv.Atoi(dbf.FieldValue(i, idx["CODE"]))
+		item.Code = strings.TrimSpace(dbf.FieldValue(i, idx["CODE"]))
 		item.QntPack, _ = strconv.Atoi(dbf.FieldValue(i, idx["QNT_PACK"]))
 		item.MOQ, _ = strconv.Atoi(dbf.FieldValue(i, idx["MOQ"]))
 		item.Qty, _ = strconv.Atoi(dbf.FieldValue(i, idx["QTY"]))
