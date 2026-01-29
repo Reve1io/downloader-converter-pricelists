@@ -1,7 +1,45 @@
 package parser
 
-import "downloader-converter-pricelists/internal/model"
+import (
+	"strings"
+
+	"downloader-converter-pricelists/internal/model"
+
+	"github.com/xuri/excelize/v2"
+)
 
 func ParseXLSX2(path string) ([]model.DBFItem, error) {
-	return []model.DBFItem{}, nil
+	f, err := excelize.OpenFile(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	rows, err := f.GetRows("ITECS_price_available")
+	if err != nil {
+		return nil, err
+	}
+
+	var items []model.DBFItem
+
+	for i, row := range rows {
+		if i == 0 {
+			continue
+		}
+		if len(row) < 2 {
+			continue
+		}
+
+		name := strings.TrimSpace(row[0])
+		if name == "" {
+			continue
+		}
+
+		items = append(items, model.DBFItem{
+			Name:     name,
+			Supplier: "Dip8",
+		})
+	}
+
+	return items, nil
 }

@@ -24,6 +24,7 @@ func WriteXLSX(path string, items []model.DBFItem) error {
 		"Pack",
 		"Weight",
 		"Prices",
+		"Supplier",
 	}
 
 	for i, h := range headers {
@@ -51,6 +52,7 @@ func WriteXLSX(path string, items []model.DBFItem) error {
 				strconv.FormatFloat(p.Price, 'f', 2, 64) + " "
 		}
 		f.SetCellValue(sheet, "I"+strconv.Itoa(row), prices)
+		f.SetCellValue(sheet, "J"+strconv.Itoa(row), it.Supplier)
 	}
 
 	return f.SaveAs(path)

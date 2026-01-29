@@ -13,4 +13,5 @@ type OutputItem struct {
 	Moq          int          `json:"moq"`
 	ImageURL     string       `json:"image_url,omitempty"`
 	PriceBreaks  []PriceBreak `json:"pricebreaks"`
+	Supplier     string       `json:"supplier"`
 }

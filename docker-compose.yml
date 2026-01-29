@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  downloader-cron:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - TZ=Europe/Moscow
+    container_name: downloader-converter-cron
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Moscow
+      - CONFIG_PATH=/app/configs/config.yaml
+      - LOG_LEVEL=info
+      - DATA_DIR=/app/data
+    volumes:
+      # Монтируем логи для сохранения при перезапуске
+      - downloader-logs:/app/logs
+      # Монтируем данные для сохранения результатов
+      - downloader-data:/app/data
+      # Монтируем конфигурацию (опционально)
+      - ./configs:/app/configs:ro
+    networks:
+      - downloader-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "downloader"
+    healthcheck:
+      test: ["CMD", "/app/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Сервис для просмотра логов (опционально)
+  log-viewer:
+    image: alpine:3.19
+    container_name: downloader-log-viewer
+    restart: "no"
+    command: tail -f /logs/cron.log
+    volumes:
+      - downloader-logs:/logs:ro
+    networks:
+      - downloader-network
+    depends_on:
+      - downloader-cron
+
+volumes:
+  downloader-logs:
+    driver: local
+  downloader-data:
+    driver: local
+
+networks:
+  downloader-network:
+    driver: bridge

@@ -1,7 +1,6 @@
 package source
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"time"
@@ -10,60 +9,38 @@ import (
 )
 
 type FTPDownloader struct {
-	Host    string
-	Port    int
-	User    string
-	Pass    string
-	Timeout time.Duration
-	Retries int
+	Addr     string // host:port
+	User     string
+	Password string
+	Timeout  time.Duration
 }
 
-func (d *FTPDownloader) Download(remoteFile, dest string) error {
-	var lastErr error
+func (d *FTPDownloader) Download(remotePath, localPath string) error {
+	c, err := ftp.Dial(d.Addr, ftp.DialWithTimeout(d.Timeout))
+	if err != nil {
+		return err
+	}
+	defer c.Quit()
 
-	for attempt := 1; attempt <= d.Retries; attempt++ {
-		conn, err := ftp.Dial(
-			d.Host+":"+fmt.Sprint(d.Port),
-			ftp.DialWithTimeout(d.Timeout),
-		)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-
-		if err := conn.Login(d.User, d.Pass); err != nil {
-			conn.Quit()
-			lastErr = err
-			continue
-		}
-
-		r, err := conn.Retr(remoteFile)
-		if err != nil {
-			conn.Quit()
-			lastErr = err
-			continue
-		}
-
-		tmp := dest + ".tmp"
-		f, err := os.Create(tmp)
-		if err != nil {
-			r.Close()
-			conn.Quit()
-			return err
-		}
-
-		_, err = io.Copy(f, r)
-		f.Close()
-		r.Close()
-		conn.Quit()
-
-		if err != nil {
-			lastErr = err
-			continue
-		}
-
-		return os.Rename(tmp, dest)
+	if err := c.Login(d.User, d.Password); err != nil {
+		return err
 	}
 
-	return lastErr
+	r, err := c.Retr(remotePath)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	out, err := os.Create(localPath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, r); err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -34,7 +34,23 @@ func main() {
 		dest := filepath.Join(cfg.InputDir, src.Filename)
 		log.Println("Downloading:", src.URL)
 
-		if err := httpDl.Download(src.URL, dest); err != nil {
+		if err := httpDl.Download(src.URL, dest, src.Type); err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	ftpDl := &source.FTPDownloader{
+		Addr:     cfg.FTP.Addr,
+		User:     cfg.FTP.User,
+		Password: cfg.FTP.Password,
+		Timeout:  time.Second * time.Duration(cfg.FTP.TimeoutSeconds),
+	}
+
+	for _, src := range cfg.FTP.Sources {
+		dest := filepath.Join(cfg.InputDir, src.Filename)
+		log.Println("Downloading FTP:", src.Remote)
+
+		if err := ftpDl.Download(src.Remote, dest); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -50,12 +66,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	x2, err := parser.ParseXLSX2("input/x2.xlsx")
+	x2, err := parser.ParseXLSX2("input/ITECS_price_available.csv")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	x3, err := parser.ParseXLSX3("input/x3.xlsx")
+	x3, err := parser.ParseXLSX3("input/ITECS_price_stock.csv")
 	if err != nil {
 		log.Fatal(err)
 	}

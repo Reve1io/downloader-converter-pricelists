@@ -1,0 +1,204 @@
+name: CI/CD Deploy Downloader-converter-pricelists
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+env:
+  PROJECT_DIR: /home/romad/downloader-converter-pricelists
+  CONTAINER_NAME: downloader-converter-cron
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.25'
+      
+      - name: Run tests
+        run: |
+          go test ./... -v
+          go vet ./...
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Deploy to production server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.PASSWORD }}  # Используем ключ вместо пароля
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script_timeout: 10m
+          script: |
+            set -e  # Выход при первой ошибке
+            echo "🚀 Начало деплоя в $(date)"
+            
+            # Переходим в директорию проекта
+            cd "${{ env.PROJECT_DIR }}"
+            
+            echo "📂 Текущая директория: $(pwd)"
+            echo "📊 Использование диска:"
+            df -h .
+            
+            # 1. СОХРАНЕНИЕ ЧУВСТВИТЕЛЬНЫХ ДАННЫХ
+            echo "💾 Сохраняем чувствительные данные..."
+            
+            # Создаем временную директорию для бэкапа
+            BACKUP_DIR="/tmp/deploy_backup_$(date +%Y%m%d_%H%M%S)"
+            mkdir -p "$BACKUP_DIR"
+            
+            # Копируем чувствительные файлы если они существуют
+            declare -a SENSITIVE_FILES=(
+              "configs/config.yaml"
+              "docker/cron/.env"
+              ".env.production"
+              "data/.gitkeep"
+            )
+            
+            for file in "${SENSITIVE_FILES[@]}"; do
+              if [ -f "$file" ] || [ -d "$file" ]; then
+                echo "  📁 Сохраняю: $file"
+                cp -r "$file" "$BACKUP_DIR/" 2>/dev/null || true
+              fi
+            done
+            
+            # 2. ОБНОВЛЕНИЕ КОДА
+            echo "🔄 Обновляем код из репозитория..."
+            
+            # Сохраняем текущий статус git
+            CURRENT_BRANCH=$(git branch --show-current)
+            echo "  Текущая ветка: $CURRENT_BRANCH"
+            
+            # Сбрасываем все локальные изменения
+            git reset --hard HEAD
+            git clean -fd -e "configs/" -e "docker/cron/.env" -e ".env.production" -e "data/"
+            
+            # Получаем последние изменения
+            git fetch origin --depth=1
+            git checkout -f master
+            git reset --hard origin/master
+            git pull origin master --ff-only
+            
+            echo "  ✅ Код обновлен. Последний коммит:"
+            git log -1 --oneline
+            
+            # 3. ВОССТАНОВЛЕНИЕ ДАННЫХ
+            echo "🔄 Восстанавливаем чувствительные данные..."
+            
+            if [ -d "$BACKUP_DIR" ]; then
+              # Восстанавливаем файлы из бэкапа
+              for file in "${SENSITIVE_FILES[@]}"; do
+                backup_file="$BACKUP_DIR/$(basename "$file")"
+                if [ -f "$backup_file" ] || [ -d "$backup_file" ]; then
+                  echo "  📁 Восстанавливаю: $file"
+                  mkdir -p "$(dirname "$file")"
+                  cp -r "$backup_file" "$file" 2>/dev/null || true
+                fi
+              done
+              
+              # Очищаем бэкап
+              rm -rf "$BACKUP_DIR"
+            fi
+            
+            # Проверяем обязательные файлы
+            if [ ! -f "configs/config.yaml" ]; then
+              echo "⚠️  Предупреждение: configs/config.yaml не найден"
+              echo "   Создаю минимальный конфиг..."
+              mkdir -p configs
+              cat > configs/config.yaml << EOF
+            # Auto-generated config
+              log_dir: /app/logs
+              data_dir: /app/data
+            EOF
+            fi
+            
+            # 4. СБОРКА И ЗАПУСК
+            echo "🐳 Останавливаем текущие контейнеры..."
+            docker-compose down --remove-orphans --timeout 30 || true
+            
+            echo "🧹 Очищаем Docker..."
+            docker system prune -f --filter "until=24h"
+            docker image prune -f
+            docker volume prune -f
+            
+            echo "🔨 Собираем новый образ..."
+            docker-compose build --no-cache --pull
+            
+            echo "🚀 Запускаем контейнеры..."
+            docker-compose up -d --remove-orphans
+            
+            # 5. ПРОВЕРКА И МОНИТОРИНГ
+            echo "⏳ Ждем запуска контейнеров (10 секунд)..."
+            sleep 10
+            
+            echo "📊 Проверяем статус развертывания:"
+            echo "=========================================="
+            
+            # Проверяем запущенные контейнеры
+            echo "🟢 Статус контейнеров:"
+            docker-compose ps
+            
+            # Проверяем здоровье контейнера
+            echo "🩺 Health check:"
+            if docker-compose exec -T ${{ env.CONTAINER_NAME }} /app/healthcheck.sh; then
+              echo "✅ Контейнер здоров"
+            else
+              echo "❌ Проблемы с health check"
+              exit 1
+            fi
+            
+            # Проверяем расписание Cron
+            echo "📅 Расписание Cron:"
+            docker-compose exec -T ${{ env.CONTAINER_NAME }} crontab -l || echo "Не удалось получить расписание"
+            
+            # Показываем последние логи
+            echo "📋 Последние логи (20 строк):"
+            docker-compose logs --tail=20 ${{ env.CONTAINER_NAME }} 2>/dev/null || echo "Логи пока недоступны"
+            
+            # Проверяем использование ресурсов
+            echo "💾 Использование ресурсов:"
+            docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" | head -5
+            
+            echo ""
+            echo "🎉 Деплой успешно завершен в $(date)"
+            echo ""
+            echo "🔧 Полезные команды для сервера:"
+            echo "   Просмотр логов:    docker-compose logs -f ${{ env.CONTAINER_NAME }}"
+            echo "   Ручной запуск:     docker-compose exec ${{ env.CONTAINER_NAME }} /app/run-with-retry.sh"
+            echo "   Проверка здоровья: docker-compose exec ${{ env.CONTAINER_NAME }} /app/healthcheck.sh"
+            echo "   Обновить образ:    cd ${{ env.PROJECT_DIR }} && git pull && docker-compose up -d --build"
+            echo "   Остановить:        docker-compose down"
+            
+            # 6. УВЕДОМЛЕНИЕ ОБ УСПЕХЕ
+            echo "📧 Отправка уведомления..."
+            DEPLOY_TIME=$(date)
+            COMMIT_HASH=$(git log -1 --pretty=format:"%h")
+            COMMIT_MESSAGE=$(git log -1 --pretty=format:"%s")
+            AUTHOR=$(git log -1 --pretty=format:"%an")
+            
+            # Можно добавить отправку в Slack/Telegram
+            echo "✅ Деплой успешен!"
+            echo "   Время: $DEPLOY_TIME"
+            echo "   Коммит: $COMMIT_HASH - $COMMIT_MESSAGE"
+            echo "   Автор: $AUTHOR"

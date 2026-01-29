@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"downloader-converter-pricelists/internal/utils"
 )
 
 type HTTPDownloader struct {
@@ -51,7 +53,7 @@ func unzipSingleFile(zipPath, destDir string) (string, error) {
 	return "", fmt.Errorf("no .dbf found in zip")
 }
 
-func (d *HTTPDownloader) Download(url, dest string) error {
+func (d *HTTPDownloader) Download(url, dest string, fileType string) error {
 	transport := &http.Transport{
 		DisableCompression: true,
 	}
@@ -81,9 +83,6 @@ func (d *HTTPDownloader) Download(url, dest string) error {
 			continue
 		}
 
-		contentType := strings.ToLower(resp.Header.Get("Content-Type"))
-		isZip := strings.Contains(contentType, "zip")
-
 		tmp := dest + ".tmp"
 		out, err := os.Create(tmp)
 		if err != nil {
@@ -111,20 +110,23 @@ func (d *HTTPDownloader) Download(url, dest string) error {
 			continue
 		}
 
-		// ZIP → распаковываем
-		if isZip {
-			log.Println("ZIP detected, extracting DBF")
+		switch fileType {
+		case "dbf_zip":
+			if utils.IsZipFile(tmp) {
+				log.Println("DBF ZIP detected, extracting")
+				_, err := unzipSingleFile(tmp, filepath.Dir(dest))
+				if err != nil {
+					return err
+				}
 
-			dbfPath, err := unzipSingleFile(tmp, filepath.Dir(dest))
-			os.Remove(tmp)
-
-			if err != nil {
-				lastErr = err
-				continue
+				os.Remove(tmp)
+				return nil
 			}
+			return fmt.Errorf("expected ZIP with DBF, got something else")
 
-			log.Println("Extracted DBF:", dbfPath)
-			return nil
+		case "xlsx":
+			// просто сохраняем
+			return os.Rename(tmp, dest)
 		}
 
 		// обычный файл → атомарная замена

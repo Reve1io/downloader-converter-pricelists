@@ -18,4 +18,5 @@ type DBFItem struct {
 	ImageURL  string
 	Weight    float64
 	Currency  string
+	Supplier  string
 }

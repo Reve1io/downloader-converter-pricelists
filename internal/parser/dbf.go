@@ -10,6 +10,8 @@ import (
 	"downloader-converter-pricelists/internal/model"
 
 	"github.com/LindsayBradford/go-dbf/godbf"
+
+	enc "downloader-converter-pricelists/internal/utils"
 )
 
 func ParseDBF(path string) ([]model.DBFItem, error) {
@@ -37,7 +39,7 @@ func ParseDBF(path string) ([]model.DBFItem, error) {
 		)
 	}
 
-	dbf, err := godbf.NewFromFile(path, "UTF8")
+	dbf, err := godbf.NewFromFile(path, "CP866")
 	if err != nil {
 		return nil, err
 	}
@@ -52,6 +54,7 @@ func ParseDBF(path string) ([]model.DBFItem, error) {
 		"WEIGHT":     fieldIndex(dbf, "WEIGHT"),
 		"CLASS_NAME": fieldIndex(dbf, "CLASS_NAME"),
 		"HISTORY":    fieldIndex(dbf, "HISTORY"),
+		"SUPPLIER":   fieldIndex(dbf, "SUPPLIER"),
 	}
 
 	if idx["NAME"] == -1 {
@@ -61,16 +64,17 @@ func ParseDBF(path string) ([]model.DBFItem, error) {
 	var items []model.DBFItem
 
 	for i := 0; i < dbf.NumberOfRecords(); i++ {
-		name := strings.TrimSpace(dbf.FieldValue(i, idx["NAME"]))
+		name := strings.TrimSpace(enc.DecodeDBF(dbf.FieldValue(i, idx["NAME"])))
 		if name == "" {
 			continue
 		}
 
 		item := model.DBFItem{
 			Name:      name,
-			Producer:  dbf.FieldValue(i, idx["PRODUCER"]),
-			ClassName: dbf.FieldValue(i, idx["CLASS_NAME"]),
-			History:   dbf.FieldValue(i, idx["HISTORY"]),
+			Producer:  enc.DecodeDBF(dbf.FieldValue(i, idx["PRODUCER"])),
+			ClassName: enc.DecodeDBF(dbf.FieldValue(i, idx["CLASS_NAME"])),
+			History:   enc.DecodeDBF(dbf.FieldValue(i, idx["HISTORY"])),
+			Supplier:  "compel",
 		}
 
 		item.Code = strings.TrimSpace(dbf.FieldValue(i, idx["CODE"]))
