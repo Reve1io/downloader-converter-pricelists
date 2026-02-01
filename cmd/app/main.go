@@ -66,12 +66,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	x2, err := parser.ParseXLSX2("input/ITECS_price_available.csv")
+	x2, err := parser.ParseCSVAvailable("input/ITECS_price_available.csv")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	x3, err := parser.ParseXLSX3("input/ITECS_price_stock.csv")
+	x3, err := parser.ParseCSVStock("input/ITECS_price_stock.csv")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -81,7 +81,15 @@ func main() {
 		log.Fatal(err)
 	}
 
+	log.Println("DBF:", len(itemsDBF))
+	log.Println("X1 :", len(x1))
+	log.Println("X2 :", len(x2))
+	log.Println("X3 :", len(x3))
+	log.Println("X4 :", len(x4))
+
 	merged := joiner.Merge(itemsDBF, x1, x2, x3, x4)
+
+	log.Println("MERGED:", len(merged))
 
 	os.MkdirAll("output", 0755)
 

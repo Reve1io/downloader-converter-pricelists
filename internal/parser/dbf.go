@@ -15,6 +15,7 @@ import (
 )
 
 func ParseDBF(path string) ([]model.DBFItem, error) {
+	log.Println("DBF parser file:", path)
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err

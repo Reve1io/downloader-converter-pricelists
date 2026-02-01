@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"downloader-converter-pricelists/internal/utils"
 )
 
 type HTTPDownloader struct {
@@ -19,38 +17,37 @@ type HTTPDownloader struct {
 	Retries int
 }
 
-func unzipSingleFile(zipPath, destDir string) (string, error) {
+func unzipSingleFile(zipPath, destFile string) error {
 	r, err := zip.OpenReader(zipPath)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer r.Close()
 
 	for _, f := range r.File {
-		// берём первый DBF
-		if strings.HasSuffix(strings.ToLower(f.Name), ".dbf") {
+		name := strings.ToLower(filepath.Base(f.Name))
+
+		if strings.HasSuffix(name, ".dbf") {
 			rc, err := f.Open()
 			if err != nil {
-				return "", err
+				return err
 			}
 			defer rc.Close()
 
-			outPath := filepath.Join(destDir, filepath.Base(f.Name))
-			out, err := os.Create(outPath)
+			log.Println("Extracted DBF directly to:", destFile)
+
+			out, err := os.Create(destFile)
 			if err != nil {
-				return "", err
+				return err
 			}
 			defer out.Close()
 
-			if _, err := io.Copy(out, rc); err != nil {
-				return "", err
-			}
-
-			return outPath, nil
+			_, err = io.Copy(out, rc)
+			return err
 		}
 	}
 
-	return "", fmt.Errorf("no .dbf found in zip")
+	return fmt.Errorf("no .dbf found in zip")
 }
 
 func (d *HTTPDownloader) Download(url, dest string, fileType string) error {
@@ -110,19 +107,17 @@ func (d *HTTPDownloader) Download(url, dest string, fileType string) error {
 			continue
 		}
 
+		log.Printf("Downloader: type=%s url=%s dest=%s", fileType, url, dest)
+
 		switch fileType {
 		case "dbf_zip":
-			if utils.IsZipFile(tmp) {
-				log.Println("DBF ZIP detected, extracting")
-				_, err := unzipSingleFile(tmp, filepath.Dir(dest))
-				if err != nil {
-					return err
-				}
-
-				os.Remove(tmp)
-				return nil
+			log.Println("DBF ZIP detected, extracting")
+			err := unzipSingleFile(tmp, dest)
+			if err != nil {
+				return err
 			}
-			return fmt.Errorf("expected ZIP with DBF, got something else")
+			os.Remove(tmp)
+			return nil
 
 		case "xlsx":
 			// просто сохраняем
