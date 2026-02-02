@@ -81,11 +81,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Println("DBF:", len(itemsDBF))
-	log.Println("X1 :", len(x1))
-	log.Println("X2 :", len(x2))
-	log.Println("X3 :", len(x3))
-	log.Println("X4 :", len(x4))
+	log.Println("Compel :", len(itemsDBF))
+	log.Println("Ruelectronics :", len(x1))
+	log.Println("Dip8_available :", len(x2))
+	log.Println("Dip8_stock :", len(x3))
+	log.Println("Radioelementy :", len(x4))
 
 	merged := joiner.Merge(itemsDBF, x1, x2, x3, x4)
 
