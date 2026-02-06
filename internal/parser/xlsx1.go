@@ -9,10 +9,10 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-func ParseXLSX1(path string) ([]model.DBFItem, error) {
+func ParseXLSX1(path string, out chan<- model.DBFItem) error {
 	f, err := excelize.OpenFile(path)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 	defer f.Close()
 
@@ -20,26 +20,31 @@ func ParseXLSX1(path string) ([]model.DBFItem, error) {
 
 	rows, err := f.GetRows(sheetName)
 	if err != nil {
-		return nil, err
+		return nil
 	}
-
-	var items []model.DBFItem
 
 	for i, row := range rows {
 		if i == 0 {
 			continue
 		}
 
+		qty := utils.AtoiSafe(utils.Cell(row, 11))
+		price := utils.ParseFloatSafe(utils.Cell(row, 12))
+
 		item := model.DBFItem{
 			Code:     utils.Cell(row, 0),
-			Name:     utils.Cell(row, 1),
-			Producer: utils.Cell(row, 2),
+			Name:     utils.Cell(row, 5),
+			Producer: utils.Cell(row, 3),
 			Qty:      utils.ParseInt(utils.Cell(row, 3)),
 			Supplier: "ruelectronics",
 		}
 
-		items = append(items, item)
-	}
+		item.Prices = append(item.Prices, model.PriceBreak{
+			Quant: qty,
+			Price: price,
+		})
 
-	return items, nil
+		out <- item
+	}
+	return nil
 }

@@ -1,4 +1,3 @@
-// internal/writer/ndjson.go
 package writer
 
 import (
@@ -8,7 +7,7 @@ import (
 	"downloader-converter-pricelists/internal/model"
 )
 
-func WriteNDJSON(path string, items []model.DBFItem) error {
+func WriteNDJSONStream(path string, ch <-chan model.DBFItem) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -17,7 +16,7 @@ func WriteNDJSON(path string, items []model.DBFItem) error {
 
 	enc := json.NewEncoder(f)
 
-	for _, it := range items {
+	for it := range ch {
 		if err := enc.Encode(it); err != nil {
 			return err
 		}

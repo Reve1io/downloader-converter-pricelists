@@ -14,17 +14,17 @@ import (
 	enc "downloader-converter-pricelists/internal/utils"
 )
 
-func ParseDBF(path string) ([]model.DBFItem, error) {
+func ParseDBF(path string, out chan<- model.DBFItem) error {
 	log.Println("DBF parser file:", path)
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil
 	}
 	defer f.Close()
 
 	header := make([]byte, 1)
 	if _, err := f.Read(header); err != nil {
-		return nil, err
+		return err
 	}
 
 	log.Printf("DBF signature: 0x%X\n", header[0])
@@ -33,7 +33,7 @@ func ParseDBF(path string) ([]model.DBFItem, error) {
 	case 0x03, 0x83, 0x8B:
 		// OK
 	default:
-		return nil, fmt.Errorf(
+		return fmt.Errorf(
 			"file %s is not DBF (signature 0x%X)",
 			path,
 			header[0],
@@ -42,7 +42,7 @@ func ParseDBF(path string) ([]model.DBFItem, error) {
 
 	dbf, err := godbf.NewFromFile(path, "CP866")
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	idx := map[string]int{
@@ -59,10 +59,8 @@ func ParseDBF(path string) ([]model.DBFItem, error) {
 	}
 
 	if idx["NAME"] == -1 {
-		return nil, fmt.Errorf("required field NAME not found in DBF")
+		return fmt.Errorf("required field NAME not found in DBF")
 	}
-
-	var items []model.DBFItem
 
 	for i := 0; i < dbf.NumberOfRecords(); i++ {
 		name := strings.TrimSpace(enc.DecodeDBF(dbf.FieldValue(i, idx["NAME"])))
@@ -113,8 +111,8 @@ func ParseDBF(path string) ([]model.DBFItem, error) {
 			item.Prices = []model.PriceBreak{{Quant: 0, Price: 0}}
 		}
 
-		items = append(items, item)
+		out <- item
 	}
 
-	return items, nil
+	return nil
 }

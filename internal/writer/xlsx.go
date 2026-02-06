@@ -8,13 +8,16 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-func WriteXLSX(path string, items []model.DBFItem) error {
+func WriteXLSXStream(path string, in <-chan model.DBFItem) error {
 	f := excelize.NewFile()
 	sheet := "Sheet1"
-	f.SetSheetName("Sheet1", sheet)
 
-	// Header
-	headers := []string{
+	sw, err := f.NewStreamWriter(sheet)
+	if err != nil {
+		return err
+	}
+
+	headers := []interface{}{
 		"Code",
 		"Name",
 		"Producer",
@@ -27,32 +30,43 @@ func WriteXLSX(path string, items []model.DBFItem) error {
 		"Supplier",
 	}
 
-	for i, h := range headers {
-		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
-		f.SetCellValue(sheet, cell, h)
+	cell, _ := excelize.CoordinatesToCellName(1, 1)
+	if err := sw.SetRow(cell, headers); err != nil {
+		return err
 	}
 
-	// Rows
-	for r, it := range items {
-		row := r + 2
+	rowID := 2
 
-		f.SetCellValue(sheet, "A"+strconv.Itoa(row), it.Code)
-		f.SetCellValue(sheet, "B"+strconv.Itoa(row), it.Name)
-		f.SetCellValue(sheet, "C"+strconv.Itoa(row), it.Producer)
-		f.SetCellValue(sheet, "D"+strconv.Itoa(row), it.ClassName)
-		f.SetCellValue(sheet, "E"+strconv.Itoa(row), it.Qty)
-		f.SetCellValue(sheet, "F"+strconv.Itoa(row), it.MOQ)
-		f.SetCellValue(sheet, "G"+strconv.Itoa(row), it.QntPack)
-		f.SetCellValue(sheet, "H"+strconv.Itoa(row), it.Weight)
-
-		// price breaks as text
+	for it := range in {
 		var prices string
 		for _, p := range it.Prices {
 			prices += strconv.Itoa(p.Quant) + ":" +
 				strconv.FormatFloat(p.Price, 'f', 2, 64) + " "
 		}
-		f.SetCellValue(sheet, "I"+strconv.Itoa(row), prices)
-		f.SetCellValue(sheet, "J"+strconv.Itoa(row), it.Supplier)
+
+		row := []interface{}{
+			it.Code,
+			it.Name,
+			it.Producer,
+			it.ClassName,
+			it.Qty,
+			it.MOQ,
+			it.QntPack,
+			it.Weight,
+			prices,
+			it.Supplier,
+		}
+
+		cell, _ := excelize.CoordinatesToCellName(1, rowID)
+		if err := sw.SetRow(cell, row); err != nil {
+			return err
+		}
+
+		rowID++
+	}
+
+	if err := sw.Flush(); err != nil {
+		return err
 	}
 
 	return f.SaveAs(path)

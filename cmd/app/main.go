@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"downloader-converter-pricelists/internal/config"
-	"downloader-converter-pricelists/internal/joiner"
+	"downloader-converter-pricelists/internal/model"
 	"downloader-converter-pricelists/internal/parser"
 	"downloader-converter-pricelists/internal/source"
 	"downloader-converter-pricelists/internal/utils"
@@ -20,11 +20,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// input/
 	os.MkdirAll(cfg.InputDir, 0755)
 	utils.CleanDir(cfg.InputDir)
 
-	// downloader
 	httpDl := &source.HTTPDownloader{
 		Timeout: time.Second * time.Duration(cfg.HTTP.TimeoutSeconds),
 		Retries: cfg.HTTP.Retries,
@@ -55,55 +53,47 @@ func main() {
 		}
 	}
 
-	// parsing → ВСЁ В DBFItem
-	itemsDBF, err := parser.ParseDBF("input/COMPELDISTI2.dbf")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	x1, err := parser.ParseXLSX1("input/x1.xlsx")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	x2, err := parser.ParseCSVAvailable("input/ITECS_price_available.csv")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	x3, err := parser.ParseCSVStock("input/ITECS_price_stock.csv")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	x4, err := parser.ParseXLSX4("input/x4.xlsx")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Println("Compel :", len(itemsDBF))
-	log.Println("Ruelectronics :", len(x1))
-	log.Println("Dip8_available :", len(x2))
-	log.Println("Dip8_stock :", len(x3))
-	log.Println("Radioelementy :", len(x4))
-
-	merged := joiner.Merge(itemsDBF, x1, x2, x3, x4)
-
-	log.Println("MERGED:", len(merged))
-
 	os.MkdirAll("output", 0755)
-
 	ts := time.Now().Format("2006-01-02_15-04-05")
 	jsonPath := "output/out_" + ts + ".ndjson"
-	xlsxPath := "output/out_" + ts + ".xlsx"
 
-	if err := writer.WriteNDJSON(jsonPath, merged); err != nil {
+	items := make(chan model.DBFItem, 2000)
+
+	go func() {
+		defer close(items)
+
+		log.Println("Parsing DBF...")
+		if err := parser.ParseDBF("input/COMPELDISTI2.dbf", items); err != nil {
+			log.Fatal(err)
+		}
+
+		log.Println("Parsing XLSX1...")
+		if err := parser.ParseXLSX1("input/x1.xlsx", items); err != nil {
+			log.Fatal(err)
+		}
+
+		log.Println("Parsing CSV Available...")
+		if err := parser.ParseCSVAvailable("input/ITECS_price_available.csv", items); err != nil {
+			log.Fatal(err)
+		}
+
+		log.Println("Parsing CSV Stock...")
+		if err := parser.ParseCSVStock("input/ITECS_price_stock.csv", items); err != nil {
+			log.Fatal(err)
+		}
+
+		log.Println("Parsing XLSX4...")
+		if err := parser.ParseXLSX4("input/x4.xlsx", items); err != nil {
+			log.Fatal(err)
+		}
+
+		log.Println("All parsers finished")
+	}()
+
+	log.Println("Writing NDJSON stream...")
+	if err := writer.WriteNDJSONStream(jsonPath, items); err != nil {
 		log.Fatal(err)
 	}
 
-	if err := writer.WriteXLSX(xlsxPath, merged); err != nil {
-		log.Fatal(err)
-	}
-
-	log.Println("✔ Done:", jsonPath, xlsxPath)
+	log.Println("✔ Done:", jsonPath)
 }
