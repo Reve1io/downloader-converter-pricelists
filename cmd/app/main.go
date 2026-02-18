@@ -1,17 +1,21 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"path/filepath"
 	"time"
 
 	"downloader-converter-pricelists/internal/config"
+	"downloader-converter-pricelists/internal/database"
 	"downloader-converter-pricelists/internal/model"
 	"downloader-converter-pricelists/internal/parser"
 	"downloader-converter-pricelists/internal/source"
 	"downloader-converter-pricelists/internal/utils"
 	"downloader-converter-pricelists/internal/writer"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -58,6 +62,8 @@ func main() {
 	jsonPath := "output/out_" + ts + ".ndjson"
 
 	items := make(chan model.DBFItem, 2000)
+	ndjsonChan := make(chan model.DBFItem, 2000)
+	pgChan := make(chan model.DBFItem, 2000)
 
 	go func() {
 		defer close(items)
@@ -90,10 +96,32 @@ func main() {
 		log.Println("All parsers finished")
 	}()
 
-	log.Println("Writing NDJSON stream...")
-	if err := writer.WriteNDJSONStream(jsonPath, items); err != nil {
+	go func() {
+		for it := range items {
+			ndjsonChan <- it
+			pgChan <- it
+		}
+		close(ndjsonChan)
+		close(pgChan)
+	}()
+
+	ctx := context.Background()
+
+	pool, err := pgxpool.New(ctx, cfg.Postgres.DSN)
+	if err != nil {
 		log.Fatal(err)
 	}
+	defer pool.Close()
 
-	log.Println("✔ Done:", jsonPath)
+	pgWriter := database.NewPGWriter(pool)
+
+	go func() {
+		if err := writer.WriteNDJSONStream(jsonPath, ndjsonChan); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	if err := pgWriter.WriteStream(ctx, pgChan); err != nil {
+		log.Fatal(err)
+	}
 }

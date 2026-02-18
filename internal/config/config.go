@@ -11,6 +11,8 @@ type Config struct {
 
 	HTTP HTTPConfig `yaml:"http"`
 	FTP  FTPConfig  `yaml:"ftp"`
+
+	Postgres PostgresConfig `yaml:"postgres"`
 }
 
 type HTTPConfig struct {
@@ -36,6 +38,10 @@ type FTPConfig struct {
 type FTPSource struct {
 	Remote   string `yaml:"remote"`
 	Filename string `yaml:"filename"`
+}
+
+type PostgresConfig struct {
+	DSN string `yaml:"dsn"`
 }
 
 func Load(path string) (*Config, error) {
