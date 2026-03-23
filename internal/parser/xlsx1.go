@@ -12,7 +12,7 @@ import (
 func ParseXLSX1(path string, out chan<- model.DBFItem) error {
 	f, err := excelize.OpenFile(path)
 	if err != nil {
-		return nil
+		return err
 	}
 	defer f.Close()
 
@@ -20,7 +20,7 @@ func ParseXLSX1(path string, out chan<- model.DBFItem) error {
 
 	rows, err := f.GetRows(sheetName)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	for i, row := range rows {
@@ -28,20 +28,18 @@ func ParseXLSX1(path string, out chan<- model.DBFItem) error {
 			continue
 		}
 
-		qty := utils.AtoiSafe(utils.Cell(row, 11))
-		price := utils.ParseFloatSafe(utils.Cell(row, 12))
-
 		item := model.DBFItem{
-			Code:     utils.Cell(row, 0),
-			Name:     utils.Cell(row, 5),
-			Producer: utils.Cell(row, 3),
-			Qty:      utils.ParseInt(utils.Cell(row, 3)),
-			Supplier: "ruelectronics",
+			Code:      utils.Cell(row, 0),
+			Name:      utils.Cell(row, 5),
+			Producer:  utils.Cell(row, 3),
+			Qty:       utils.AtoiSafe(utils.Cell(row, 9)),
+			ClassName: utils.Cell(row, 6),
+			Supplier:  "ruelectronics",
 		}
 
 		item.Prices = append(item.Prices, model.PriceBreak{
-			Quant: qty,
-			Price: price,
+			Quant: utils.AtoiSafe(utils.Cell(row, 9)),
+			Price: utils.ParseFloatSafe(utils.Cell(row, 10)),
 		})
 
 		out <- item
