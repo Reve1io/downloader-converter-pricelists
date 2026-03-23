@@ -24,7 +24,7 @@ func ParseXLSX1(path string, out chan<- model.DBFItem) error {
 	}
 
 	for i, row := range rows {
-		if i == 0 {
+		if i < 5 {
 			continue
 		}
 

@@ -20,6 +20,8 @@ type PGWriter struct {
 	products  map[string]int64
 	producers map[string]int32
 	suppliers map[string]int32
+
+	seen map[string]bool
 }
 
 func NewPGWriter(pool *pgxpool.Pool) *PGWriter {
@@ -28,6 +30,7 @@ func NewPGWriter(pool *pgxpool.Pool) *PGWriter {
 		products:  make(map[string]int64),
 		producers: make(map[string]int32),
 		suppliers: make(map[string]int32),
+		seen:      make(map[string]bool),
 	}
 }
 
@@ -59,6 +62,22 @@ func (w *PGWriter) WriteStream(ctx context.Context, in <-chan model.DBFItem) (er
 		supplierID, err := w.getSupplierID(ctx, tx, item.Supplier)
 		if err != nil {
 			return err
+		}
+
+		key := item.Code + "|" + item.Supplier
+
+		if !w.seen[key] {
+			_, err := tx.Exec(ctx,
+				`DELETE FROM current_prices
+				 WHERE product_id=$1 AND supplier_id=$2`,
+				productID,
+				supplierID,
+			)
+			if err != nil {
+				return err
+			}
+
+			w.seen[key] = true
 		}
 
 		for _, p := range item.Prices {

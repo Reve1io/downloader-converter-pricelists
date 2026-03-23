@@ -38,6 +38,7 @@ func ParseXLSX4(path string, out chan<- model.DBFItem) error {
 			Code:      utils.Cell(row, 4),
 			Name:      utils.Cell(row, 3),
 			Producer:  utils.Cell(row, 5),
+			Qty:       utils.ParseInt(row[7]),
 			ClassName: utils.Cell(row, 3),
 			Supplier:  "radioelementy",
 		}
