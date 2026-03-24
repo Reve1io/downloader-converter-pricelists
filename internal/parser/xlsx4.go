@@ -21,41 +21,57 @@ func ParseXLSX4(path string, out chan<- model.DBFItem) error {
 		return err
 	}
 
+	agg := make(map[string]*model.DBFItem)
+
 	for i, row := range rows {
 		if i == 0 {
 			continue
 		}
-		if len(row) < 2 {
+		if len(row) < 8 {
 			continue
 		}
 
-		name := strings.TrimSpace(row[0])
+		name := strings.TrimSpace(utils.Cell(row, 3))
 		if name == "" {
 			continue
 		}
 
-		item := model.DBFItem{
-			Code:      utils.Cell(row, 4),
-			Name:      utils.Cell(row, 3),
-			Producer:  utils.Cell(row, 5),
-			Qty:       utils.ParseInt(row[7]),
-			ClassName: utils.Cell(row, 3),
-			Supplier:  "radioelementy",
-		}
+		producer := utils.Cell(row, 5)
+		code := utils.Cell(row, 4)
+		qty := utils.ParseInt(row[7])
 
-		for i := 11; i <= 15; i += 2 {
-			qty := utils.AtoiSafe(utils.Cell(row, i+1))
-			price := utils.ParseFloatSafe(utils.Cell(row, i))
+		key := producer + "|" + name
 
-			if qty > 0 && price > 0 {
-				item.Prices = append(item.Prices, model.PriceBreak{
-					Quant: qty,
-					Price: price,
-				})
+		if _, ok := agg[key]; !ok {
+
+			item := &model.DBFItem{
+				Code:      code,
+				Name:      name,
+				Producer:  producer,
+				ClassName: name,
+				Supplier:  "radioelementy",
 			}
+
+			for j := 11; j <= 15; j += 2 {
+				price := utils.ParseFloatSafe(utils.Cell(row, j))
+				q := utils.AtoiSafe(utils.Cell(row, j+1))
+
+				if q > 0 && price > 0 {
+					item.Prices = append(item.Prices, model.PriceBreak{
+						Quant: q,
+						Price: price,
+					})
+				}
+			}
+
+			agg[key] = item
 		}
 
-		out <- item
+		agg[key].Qty += qty
+	}
+
+	for _, item := range agg {
+		out <- *item
 	}
 
 	return nil
