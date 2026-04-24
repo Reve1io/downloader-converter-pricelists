@@ -150,8 +150,7 @@ func (w *PGWriter) upsertProduct(
 	item model.DBFItem,
 ) (int64, error) {
 
-	// ---- cache check ----
-	if id, ok := w.products[item.Code]; ok {
+	if id, ok := w.products[item.Code+"|"+item.Supplier]; ok {
 		return id, nil
 	}
 
@@ -160,15 +159,21 @@ func (w *PGWriter) upsertProduct(
 		return 0, err
 	}
 
+	supplierID, err := w.getSupplierID(ctx, tx, item.Supplier)
+	if err != nil {
+		return 0, err
+	}
+
 	var id int64
 
 	err = tx.QueryRow(ctx,
 		`INSERT INTO products
-		(code,name,producer_id,category_id,history,image_url,weight,updated_at)
-		VALUES ($1,$2,$3,NULL,$4,$5,$6,now())
-		ON CONFLICT (code)
+		(code,name,supplier_id,producer_id,category_id,history,image_url,weight,updated_at)
+		VALUES ($1,$2,$3,$4,NULL,$5,$6,$7,now())
+		ON CONFLICT (code, supplier_id)
 		DO UPDATE SET
 			name = EXCLUDED.name,
+			supplier_id = EXCLUDED.supplier_id,
 			producer_id = EXCLUDED.producer_id,
 			history = EXCLUDED.history,
 			image_url = EXCLUDED.image_url,
@@ -177,6 +182,7 @@ func (w *PGWriter) upsertProduct(
 		RETURNING id`,
 		item.Code,
 		item.Name,
+		supplierID,
 		producerID,
 		item.History,
 		item.ImageURL,
@@ -187,7 +193,7 @@ func (w *PGWriter) upsertProduct(
 		return 0, err
 	}
 
-	w.products[item.Code] = id
+	w.products[item.Code+"|"+item.Supplier] = id
 
 	return id, nil
 }

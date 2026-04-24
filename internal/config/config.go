@@ -9,8 +9,9 @@ import (
 type Config struct {
 	InputDir string `yaml:"input_dir"`
 
-	HTTP HTTPConfig `yaml:"http"`
-	FTP  FTPConfig  `yaml:"ftp"`
+	HTTP HTTPConfig     `yaml:"http"`
+	FTP  FTPDownloader  `yaml:"ftp"`
+	SFTP SFTPDownloader `yaml:"sftp"`
 
 	Postgres PostgresConfig `yaml:"postgres"`
 }
@@ -27,7 +28,7 @@ type HTTPSource struct {
 	Type     string `yaml:"type"`
 }
 
-type FTPConfig struct {
+type FTPDownloader struct {
 	Addr           string      `yaml:"addr"`
 	User           string      `yaml:"user"`
 	Password       string      `yaml:"password"`
@@ -36,6 +37,19 @@ type FTPConfig struct {
 }
 
 type FTPSource struct {
+	Remote   string `yaml:"remote"`
+	Filename string `yaml:"filename"`
+}
+
+type SFTPDownloader struct {
+	Addr           string       `yaml:"addr"`
+	User           string       `yaml:"user"`
+	Password       string       `yaml:"password"`
+	TimeoutSeconds int          `yaml:"timeout_seconds"`
+	Sources        []SFTPSource `yaml:"sources"`
+}
+
+type SFTPSource struct {
 	Remote   string `yaml:"remote"`
 	Filename string `yaml:"filename"`
 }

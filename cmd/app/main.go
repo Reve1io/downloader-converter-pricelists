@@ -57,6 +57,22 @@ func main() {
 		}
 	}
 
+	sftpD1 := &source.SFTPDownloader{
+		Addr:     cfg.SFTP.Addr,
+		User:     cfg.SFTP.User,
+		Password: cfg.SFTP.Password,
+		Timeout:  time.Second * time.Duration(cfg.SFTP.TimeoutSeconds),
+	}
+
+	for _, src := range cfg.SFTP.Sources {
+		dest := filepath.Join(cfg.InputDir, src.Filename)
+		log.Println("Downloading SFTP:", src.Remote)
+
+		if err := sftpD1.Download(src.Remote, dest); err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	os.MkdirAll("output", 0755)
 	ts := time.Now().Format("2006-01-02_15-04-05")
 	jsonPath := "output/out_" + ts + ".ndjson"
@@ -90,6 +106,11 @@ func main() {
 
 		log.Println("Parsing XLSX4...")
 		if err := parser.ParseXLSX4("input/x4.xlsx", items); err != nil {
+			log.Fatal(err)
+		}
+
+		log.Println("Parsing XLSX5...")
+		if err := parser.ParseXLSX5("input/unload_all.xlsx", items); err != nil {
 			log.Fatal(err)
 		}
 
